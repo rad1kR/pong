@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PONG</title>
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: monospace;
+        }
+
+        body > p {
+            font-size: 3rem;
+        }
+
+        #overlay {
+            visibility: hidden;
+            position: absolute;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .wrapper {
+            width: 100%;
+            height: 30%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            align-items: center;
+            color: white;
+            background-color: black;
+        }
+
+        .wrapper > h1 {
+            font-size: 3rem;
+        }
+
+        .wrapper > p {
+            font-size: 2rem;
+        }
+
+        button {
+            padding: .5rem 1rem;
+            border: .1rem solid black;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            border: .1rem solid white;
+            color: white;
+            background-color: black;
+        }
+    </style>
+</head>
+<body>
+    <p id="score"><span id="score1">0</span>:<span id="score2">0</span></p>
+    <canvas id="canvas" width="750" height="500"></canvas>
+    <div id="overlay">
+        <div class="wrapper">
+            <h1>GAME OVER</h1>
+            <p id="finalScore"></p>
+            <button id="restart">RESTART</button>
+        </div>
+    </div>
+
+    <script>
+        let canvas = document.getElementById('canvas')
+        let ctx = canvas.getContext('2d')
+        let cvsProps = canvas.getBoundingClientRect()
+        let overlay = document.getElementById('overlay')
+        let restart = document.getElementById('restart')
+        let score1 = document.getElementById('score1')
+        let score2 = document.getElementById('score2')
+        let finalScore = document.getElementById('finalScore')
+        class Rect {
+            constructor(color, x, y, sizeX, sizeY) {
+                this.color = color
+                this.x = x
+                this.y = y
+                this.sizeX = sizeX
+                this.sizeY = sizeY
+            }
+        }
+        let gameBoard = new Rect('black', 0, 0, canvas.width, canvas.height)
+        let player1 = new Rect('white', 2, canvas.height / 2 - 40, 10, 80)
+        let player2 = new Rect('white', canvas.width - 12, canvas.height / 2 - 40, 10, 80)
+        let centerLine = new Rect('white', canvas.width / 2 - 1, 0, 3, 20)
+        let ball = {
+            color: 'yellow',
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            size: 10,
+            directionX: Math.floor(Math.random() * 2),
+            directionY: Math.floor(Math.random() * 2),
+            speed: 3
+        }
+        let gameStart = false
+        let rounds = 7
+        // random number 0.8 - 0.85
+        let difficulty = .8 + ((Math.floor(Math.random() * 6)) * 0.01)
+
+        renderGame()
+        renderText()
+
+        function gameLoop() {
+            if (!gameStart) {
+                return
+            }
+            renderGame()
+            moveBall()
+            moveEnemy()
+            wallsCollision()
+            playersCollision()
+            roundOver()
+            endGame()
+            requestAnimationFrame(gameLoop)
+        }
+
+        // EVENT LISTENERS
+        addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                gameStart = true
+                gameLoop()
+            }
+        })
+
+        restart.addEventListener('click', (e) => location.reload())
+
+        addEventListener('mousemove', movePlayer)
+
+        // RENDERING
+        function renderGame() {
+            ctx.fillStyle = gameBoard.color
+            ctx.fillRect(gameBoard.x, gameBoard.y, gameBoard.sizeX, gameBoard.sizeY)
+
+            ctx.fillStyle = player1.color
+            ctx.fillRect(player1.x, player1.y, player1.sizeX, player1.sizeY)
+
+            ctx.fillStyle = player2.color
+            ctx.fillRect(player2.x, player2.y, player2.sizeX, player2.sizeY)
+
+            let centerLineY = 2.5
+            while (centerLineY <= canvas.height) {
+                ctx.fillStyle = centerLine.color
+                ctx.fillRect(centerLine.x, centerLineY, centerLine.sizeX, centerLine.sizeY)
+                centerLineY += centerLine.sizeY + 5
+            }
+
+            ctx.beginPath()
+            ctx.fillStyle = ball.color
+            ctx.arc(ball.x, ball.y, ball.size, 0, 2 * Math.PI)
+            ctx.fill()
+        }
+
+        function renderText() {
+            ctx.fillStyle = 'black'
+            ctx.fillRect(125, canvas.height / 2 - 30, 500, 60)
+            
+            ctx.font = '26px monospace'
+            ctx.fillStyle = 'white'
+            ctx.textAlign = 'center'
+            ctx.fillText('Press Enter to begin', canvas.width / 2, canvas.height / 2)
+        }
+
+        // MOVING
+        function movePlayer(e) {
+            if (e.clientY >= cvsProps.top + player1.sizeY / 2 && e.clientY <= cvsProps.bottom - player1.sizeY / 2) {
+                player1.y = e.clientY - cvsProps.top - player1.sizeY / 2
+            }
+        }
+
+        function moveEnemy() {
+            player2.y = ball.y * difficulty
+        }
+
+        function moveBall() {
+            ball.directionX === 0 ? ball.x -= ball.speed : ball.x += ball.speed
+            ball.directionY === 0 ? ball.y -= ball.speed : ball.y += ball.speed
+        }
+
+        // CHECKING COLLISION
+        function wallsCollision() {
+            if (ball.y - ball.size <= 0) {
+                ball.directionY = 1
+            } else if (ball.y + ball.size >= canvas.height) {
+                ball.directionY = 0
+            }
+        }
+
+        function playersCollision() {
+            if (ball.x <= player1.x + player1.sizeX + 2 + ball.size) {
+                if (ball.y >= player1.y && ball.y <= player1.y + player1.sizeY) {
+                    ball.directionX = 1
+                    ball.speed += .2
+                }
+            } else if (ball.x >= player2.x - ball.size) {
+                if (ball.y >= player2.y && ball.y <= player2.y + player2.sizeY) {
+                    ball.directionX = 0
+                    ball.speed += .2
+                }
+            }
+        }
+
+        // START, RESTART & END      
+        function roundOver() {
+            if (ball.x <= 0) {
+                resetBall()
+                score2.innerHTML++
+            } else if (ball.x >= canvas.width) {
+                resetBall()   
+                score1.innerHTML++
+            }
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2
+            ball.y = canvas.height / 2
+            ball.directionX = Math.floor(Math.random() * 2)
+            ball.directionY = Math.floor(Math.random() * 2)
+            ball.speed = 3
+            difficulty = .8 + ((Math.floor(Math.random() * 6)) * 0.01)
+        }
+
+        function endGame() {
+            if (+score1.innerHTML + (+score2.innerHTML) === rounds) {
+                gameStart = false
+                finalScore.innerHTML = `SCORE: ${score1.innerHTML}:${score2.innerHTML}`
+                overlay.style.visibility = 'visible'
+            }
+        }
+    </script>
+</body>
+</html>
